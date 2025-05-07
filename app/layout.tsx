@@ -3,9 +3,7 @@ import './globals.css'
 import { ConfigProvider } from './context/ConfigContext'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.dev',
+  title: 'Simulador prestamos',
 }
 
 export default function RootLayout({
