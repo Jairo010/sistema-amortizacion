@@ -226,8 +226,11 @@ export function LoanCalculatorForm() {
                           <SelectValue placeholder="Selecciona un tipo de préstamo" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="prestamo personal">Préstamo Personal</SelectItem>
-                          <SelectItem value="prestamo hipotecario">Préstamo Hipotecario</SelectItem>
+                          {configLoanTypes?.tipos_prestamos?.map((tipo: any) => (
+                            <SelectItem key={tipo.descripcion} value={tipo.descripcion}>
+                              {tipo.descripcion}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
