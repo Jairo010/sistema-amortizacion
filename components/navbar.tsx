@@ -25,12 +25,7 @@ export function Navbar() {
             </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="link"
-                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary p-0"
-                >
-                  Información
-                </Button>
+                
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuItem asChild>
@@ -44,21 +39,11 @@ export function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Link
-              href="/contacto"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-            >
-              Contacto
-            </Link>
+            
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/client-access">
-            <Button variant="outline" size="sm" className="hidden md:flex">
-              <FileText className="mr-2 h-4 w-4" />
-              Consultar Préstamo
-            </Button>
-          </Link>
+          
           <Link href="/login">
             <Button size="sm">Iniciar Sesión</Button>
           </Link>
