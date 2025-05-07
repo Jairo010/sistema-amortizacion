@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { calcularSistemaAleman, calcularSistemaFrances, getConfiguracion, getConfiguracionPorTipoPrestamos, getTiposPrestamos } from "../utils/supabase/supabase.service"
+import { calcularSistemaAleman, calcularSistemaFrances, getConfiguracion, getConfiguracionesPorInstitucionesFinancieras, getConfiguracionPorTipoPrestamos, getTiposPrestamos } from "../utils/supabase/supabase.service"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -42,10 +42,12 @@ export default function LoginPage() {
         // console.log('Resultado sistema francés:', resultado_frances);
         // const resultado_aleman = await calcularSistemaAleman(100000, 5, 20);
         // console.log('Resultado sistema alemán:', resultado_aleman);
-        const tipos = await getTiposPrestamos();
-        console.log('tipos:', tipos);
-        const configuraciones = await getConfiguracionPorTipoPrestamos("Prestamo Hipotecario");
-        console.log('configuraciones:', configuraciones);
+        // const tipos = await getTiposPrestamos();
+        // console.log('tipos:', tipos);
+        // const configuraciones = await getConfiguracionPorTipoPrestamos("Prestamo Hipotecario");
+        // console.log('configuraciones:', configuraciones);
+        const configuraciones_instituciones = await getConfiguracionesPorInstitucionesFinancieras("Jairos Bank");
+        console.log('configuraciones_instituciones:', configuraciones_instituciones);
       } catch (error) {
         console.error('Error al probar la función:', error);
       }

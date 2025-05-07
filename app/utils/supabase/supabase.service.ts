@@ -83,3 +83,17 @@ export async function getTiposPrestamos() {
     return data;
 }
 
+export async function getConfiguracionesPorInstitucionesFinancieras(institucion_financiera: string) {
+    const { data, error } = await supabase
+        .rpc('get_tipos_prestamos_configuraciones_por_institucion', {
+            institucion: institucion_financiera
+        });
+
+    if (error) {
+        console.error('Error al obtener las configuraciones por instituciones financieras:', error);
+        throw error;
+    }
+
+    return data;
+}
+
