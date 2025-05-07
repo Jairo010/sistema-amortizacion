@@ -304,10 +304,7 @@ export function LoanCalculatorForm() {
                       <Slider
                         id="interest-rate"
                         value={[interestRate]}
-                        onValueChange={(values) => setInterestRate(values[0])}
-                        min={5}
-                        max={30}
-                        step={0.1}
+                        
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>5%</span>
@@ -317,10 +314,9 @@ export function LoanCalculatorForm() {
                         type="number"
                         value={interestRate}
                         onChange={(e) => {
-                          const value = Number.parseFloat(e.target.value)
-                          if (!isNaN(value)) {
-                            setInterestRate(value)
-                          }
+                          
+                            setInterestRate(interestRate)
+                          
                         }}
                         className="mt-2"
                       />
