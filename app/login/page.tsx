@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Building, User } from "lucide-react"
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { calcularSistemaAleman, calcularSistemaFrances, getConfiguracion } from "../utils/supabase/supabase.service"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -33,6 +34,22 @@ export default function LoginPage() {
       router.push("/client/dashboard")
     }
   }
+
+  useEffect(() => {
+    async function probar() {
+      try {
+        // const resultado_frances = await calcularSistemaFrances(100000, 15, 20);
+        // console.log('Resultado sistema francés:', resultado_frances);
+        // const resultado_aleman = await calcularSistemaAleman(100000, 5, 20);
+        // console.log('Resultado sistema alemán:', resultado_aleman);
+        // const configuracion = await getConfiguracion("banco hipotecas");
+        // console.log('Configuración:', configuracion);
+      } catch (error) {
+        console.error('Error al probar la función:', error);
+      }
+    }
+    probar();
+  }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
