@@ -228,8 +228,6 @@ export function LoanCalculatorForm() {
                         <SelectContent>
                           <SelectItem value="prestamo personal">Préstamo Personal</SelectItem>
                           <SelectItem value="prestamo hipotecario">Préstamo Hipotecario</SelectItem>
-                          <SelectItem value="prestamo automotriz">Préstamo Automotriz</SelectItem>
-                          <SelectItem value="prestamo empresarial">Préstamo Empresarial</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
