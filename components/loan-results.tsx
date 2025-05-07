@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { ArrowLeft, Download, FileText, Printer } from "lucide-react"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +30,8 @@ interface LoanResultsProps {
     insuranceRate: number
     commissionRate: number
     commissionType: string
-  }
+  },
+  data: any,
   onNewCalculation: () => void
 }
 
@@ -52,9 +55,55 @@ export function LoanResults({
   includeCommission,
   gracePeriod,
   loanConfig,
+  data,
   onNewCalculation,
 }: LoanResultsProps) {
   const [activeTab, setActiveTab] = useState("table")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
+
+  // Calcular el índice inicial y final para la paginación
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentItems = data.slice(indexOfFirstItem, indexOfLastItem)
+  const totalPages = Math.ceil(data.length / itemsPerPage)
+
+  // Función para generar el rango de páginas a mostrar
+  const getPageRange = () => {
+    const delta = 2 // Número de páginas a mostrar a cada lado de la página actual
+    const range: number[] = []
+    const rangeWithDots: (number | string)[] = []
+    let l: number | undefined
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - delta && i <= currentPage + delta)
+      ) {
+        range.push(i)
+      }
+    }
+
+    range.forEach(i => {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1)
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...')
+        }
+      }
+      rangeWithDots.push(i)
+      l = i
+    })
+
+    return rangeWithDots
+  }
+
+  // Función para cambiar de página
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber)
+  }
 
   // Convertir tasa anual a la frecuencia correspondiente
   let ratePerPeriod: number
@@ -207,13 +256,13 @@ export function LoanResults({
   // Obtener el nombre del tipo de préstamo
   const getLoanTypeName = () => {
     switch (loanType) {
-      case "personal":
+      case "prestamo personal":
         return "Préstamo Personal"
-      case "mortgage":
+      case "prestamo hipotecario":
         return "Préstamo Hipotecario"
-      case "auto":
+      case "prestamo automotriz":
         return "Préstamo Automotriz"
-      case "business":
+      case "prestamo empresarial":
         return "Préstamo Empresarial"
       default:
         return "Préstamo"
@@ -234,6 +283,264 @@ export function LoanResults({
     }
   }
 
+  // Función para exportar a PDF
+  const handleExportPDF = () => {
+    const doc = new jsPDF()
+    
+    // Título del documento
+    doc.setFontSize(16)
+    doc.text("Tabla de Amortización", 14, 15)
+    
+    // Información del préstamo
+    doc.setFontSize(10)
+    doc.text([
+      `Tipo de Préstamo: ${getLoanTypeName()}`,
+      `Monto: ${formatCurrency(amount)}`,
+      `Plazo: ${term} años`,
+      `Tasa de Interés: ${interestRate}% anual`,
+      `Sistema: ${amortizationType === "french" ? "Francés" : "Alemán"}`,
+      `Frecuencia: ${getFrequencyName()}`,
+    ], 14, 25)
+
+    // Configurar la tabla
+    const tableColumn = [
+      "Período",
+      "Fecha",
+      "Cuota",
+      "Amortización",
+      "Interés",
+      ...(includeInsurance ? ["Seguro"] : []),
+      "Saldo Inicial",
+      "Saldo Final"
+    ]
+
+    const tableRows = data.map((row: any) => {
+      const paymentDate = new Date()
+      if (paymentFrequency === "weekly") {
+        paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 7)
+      } else if (paymentFrequency === "biweekly") {
+        paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 15)
+      } else {
+        paymentDate.setMonth(paymentDate.getMonth() + row.nro_cuota)
+      }
+
+      return [
+        row.nro_cuota,
+        paymentDate.toLocaleDateString(),
+        formatCurrency(row.cuota),
+        formatCurrency(row.amortizacion),
+        formatCurrency(row.interes),
+        ...(includeInsurance ? [formatCurrency((loanConfig.insuranceRate / 100 / 12) * row.saldo_inicial || 0)] : []),
+        formatCurrency(row.saldo_inicial),
+        formatCurrency(row.saldo_final)
+      ]
+    })
+
+    // Agregar la tabla al PDF
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 60,
+      theme: 'grid',
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+      },
+      headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        fontSize: 8,
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+    })
+
+    // Agregar resumen al final
+    const finalY = (doc as any).lastAutoTable.finalY || 60
+    doc.setFontSize(10)
+    doc.text([
+      "Resumen:",
+      `Total a Pagar: ${formatCurrency(totalPayment + openingCommission)}`,
+      `Total Intereses: ${formatCurrency(totalInterest)}`,
+      `Total Seguro: ${formatCurrency(totalInsurance)}`,
+      `CAT: ${calculateCAT()}%`,
+    ], 14, finalY + 10)
+
+    // Guardar el PDF
+    doc.save(`tabla-amortizacion-${loanType}-${new Date().toISOString().split('T')[0]}.pdf`)
+  }
+
+  // Función para imprimir
+  const handlePrint = () => {
+    // Crear un elemento temporal para el contenido de impresión
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    // Preparar el contenido HTML
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Tabla de Amortización</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 20px;
+            }
+            .info-section {
+              margin-bottom: 20px;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 5px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: right;
+            }
+            th {
+              background-color: #f5f5f5;
+              text-align: center;
+            }
+            .summary {
+              margin-top: 20px;
+              border-top: 2px solid #000;
+              padding-top: 10px;
+            }
+            @media print {
+              .no-print {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Tabla de Amortización</h1>
+          </div>
+
+          <div class="info-section">
+            <div class="info-row">
+              <strong>Tipo de Préstamo:</strong>
+              <span>${getLoanTypeName()}</span>
+            </div>
+            <div class="info-row">
+              <strong>Monto:</strong>
+              <span>${formatCurrency(amount)}</span>
+            </div>
+            <div class="info-row">
+              <strong>Plazo:</strong>
+              <span>${term} años</span>
+            </div>
+            <div class="info-row">
+              <strong>Tasa de Interés:</strong>
+              <span>${interestRate}% anual</span>
+            </div>
+            <div class="info-row">
+              <strong>Sistema:</strong>
+              <span>${amortizationType === "french" ? "Francés" : "Alemán"}</span>
+            </div>
+            <div class="info-row">
+              <strong>Frecuencia:</strong>
+              <span>${getFrequencyName()}</span>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Período</th>
+                <th>Fecha</th>
+                <th>Cuota</th>
+                <th>Amortización</th>
+                <th>Interés</th>
+                ${includeInsurance ? '<th>Seguro</th>' : ''}
+                <th>Saldo Inicial</th>
+                <th>Saldo Final</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map((row: any) => {
+                const paymentDate = new Date()
+                if (paymentFrequency === "weekly") {
+                  paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 7)
+                } else if (paymentFrequency === "biweekly") {
+                  paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 15)
+                } else {
+                  paymentDate.setMonth(paymentDate.getMonth() + row.nro_cuota)
+                }
+
+                return `
+                  <tr>
+                    <td>${row.nro_cuota}</td>
+                    <td>${paymentDate.toLocaleDateString()}</td>
+                    <td>${formatCurrency(row.cuota)}</td>
+                    <td>${formatCurrency(row.amortizacion)}</td>
+                    <td>${formatCurrency(row.interes)}</td>
+                    ${includeInsurance ? `<td>${formatCurrency((loanConfig.insuranceRate / 100 / 12) * row.saldo_inicial || 0)}</td>` : ''}
+                    <td>${formatCurrency(row.saldo_inicial)}</td>
+                    <td>${formatCurrency(row.saldo_final)}</td>
+                  </tr>
+                `
+              }).join('')}
+            </tbody>
+          </table>
+
+          <div class="summary">
+            <div class="info-row">
+              <strong>Total a Pagar:</strong>
+              <span>${formatCurrency(totalPayment + openingCommission)}</span>
+            </div>
+            <div class="info-row">
+              <strong>Total Intereses:</strong>
+              <span>${formatCurrency(totalInterest)}</span>
+            </div>
+            ${includeInsurance ? `
+              <div class="info-row">
+                <strong>Total Seguro:</strong>
+                <span>${formatCurrency(totalInsurance)}</span>
+              </div>
+            ` : ''}
+            <div class="info-row">
+              <strong>CAT:</strong>
+              <span>${calculateCAT()}%</span>
+            </div>
+          </div>
+
+          <div class="no-print" style="margin-top: 20px; text-align: center;">
+            <button onclick="window.print()">Imprimir</button>
+          </div>
+        </body>
+      </html>
+    `
+
+    // Escribir el contenido en la nueva ventana
+    printWindow.document.write(content)
+    printWindow.document.close()
+
+    // Esperar a que se cargue el contenido
+    printWindow.onload = function() {
+      printWindow.print()
+      // Cerrar la ventana después de imprimir
+      printWindow.onafterprint = function() {
+        printWindow.close()
+      }
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -249,11 +556,11 @@ export function LoanResults({
               <ArrowLeft className="mr-2 h-4 w-4" />
               Nuevo Cálculo
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="mr-2 h-4 w-4" />
               Imprimir
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
               <Download className="mr-2 h-4 w-4" />
               Exportar
             </Button>
@@ -269,9 +576,9 @@ export function LoanResults({
           <div className="rounded-lg border p-4">
             <h3 className="text-sm font-medium text-muted-foreground">Plazo</h3>
             <p className="mt-1 text-xl font-medium">
-              {term} meses
+              {term} años
               <span className="block text-xs text-muted-foreground">
-                {totalPeriods} pagos {getFrequencyName()}es
+                {totalPeriods * 12} pagos {getFrequencyName()}es
               </span>
             </p>
           </div>
@@ -280,7 +587,7 @@ export function LoanResults({
             <p className="mt-1 text-xl font-medium">
               {interestRate}% anual
               <span className="block text-xs text-muted-foreground">
-                {(interestRate / periodsPerYear).toFixed(2)}% {getFrequencyName()}
+                {(interestRate /100 / periodsPerYear).toFixed(2)}% {getFrequencyName()}
               </span>
             </p>
           </div>
@@ -337,50 +644,97 @@ export function LoanResults({
                   <TableRow>
                     <TableHead>Período</TableHead>
                     <TableHead>Fecha</TableHead>
-                    <TableHead>Pago</TableHead>
-                    <TableHead>Capital</TableHead>
+                    <TableHead>Cuota</TableHead>
+                    <TableHead>Amortizacion</TableHead>
                     <TableHead>Interés</TableHead>
                     {includeInsurance && <TableHead>Seguro</TableHead>}
-                    <TableHead>Saldo</TableHead>
+                    <TableHead>Saldo inicial</TableHead>
+                    <TableHead>Saldo final</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {amortizationTable.slice(0, 12).map((row) => {
+                  {currentItems.map((row: any) => {
                     // Calcular fecha aproximada de pago
                     const paymentDate = new Date()
                     if (paymentFrequency === "weekly") {
-                      paymentDate.setDate(paymentDate.getDate() + row.period * 7)
+                      paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 7)
                     } else if (paymentFrequency === "biweekly") {
-                      paymentDate.setDate(paymentDate.getDate() + row.period * 15)
+                      paymentDate.setDate(paymentDate.getDate() + row.nro_cuota * 15)
                     } else {
-                      paymentDate.setMonth(paymentDate.getMonth() + row.period)
+                      paymentDate.setMonth(paymentDate.getMonth() + row.nro_cuota)
                     }
 
                     return (
-                      <TableRow key={row.period}>
-                        <TableCell>{row.period}</TableCell>
+                      <TableRow key={row.nro_cuota}>
+                        <TableCell>{row.nro_cuota}</TableCell>
                         <TableCell>{paymentDate.toLocaleDateString()}</TableCell>
-                        <TableCell>{formatCurrency(row.payment)}</TableCell>
-                        <TableCell>{formatCurrency(row.principal)}</TableCell>
-                        <TableCell>{formatCurrency(row.interest)}</TableCell>
-                        {includeInsurance && <TableCell>{formatCurrency(row.insurance || 0)}</TableCell>}
-                        <TableCell>{formatCurrency(row.balance)}</TableCell>
+                        <TableCell>{formatCurrency(row.cuota)}</TableCell>
+                        <TableCell>{formatCurrency(row.amortizacion)}</TableCell>
+                        <TableCell>{formatCurrency(row.interes)}</TableCell>
+                        {includeInsurance && <TableCell>{formatCurrency((loanConfig.insuranceRate / 100 / 12) * row.saldo_inicial || 0)}</TableCell>}
+                        <TableCell>{formatCurrency(row.saldo_inicial)}</TableCell>
+                        <TableCell>{formatCurrency(row.saldo_final)}</TableCell>
                       </TableRow>
                     )
                   })}
-                  {totalPeriods > 12 && (
-                    <TableRow>
-                      <TableCell colSpan={includeInsurance ? 7 : 6} className="text-center text-muted-foreground">
-                        Mostrando los primeros 12 períodos de {totalPeriods}. Haz clic en "Ver Completo" para ver todos.
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </div>
-            {totalPeriods > 12 && (
-              <div className="mt-4 text-center">
-                <Button variant="outline">Ver Completo</Button>
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                  className="h-8 w-8 p-0"
+                >
+                  «
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="h-8 w-8 p-0"
+                >
+                  ‹
+                </Button>
+                <div className="flex items-center gap-1">
+                  {getPageRange().map((page, index) => (
+                    page === '...' ? (
+                      <span key={`ellipsis-${index}`} className="px-2">...</span>
+                    ) : (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(page as number)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="h-8 w-8 p-0"
+                >
+                  ›
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="h-8 w-8 p-0"
+                >
+                  »
+                </Button>
               </div>
             )}
           </TabsContent>
