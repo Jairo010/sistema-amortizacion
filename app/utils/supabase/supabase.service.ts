@@ -56,4 +56,30 @@ export async function getConfiguracion(nombre_institucion: string) {
     return data;
 }
 
+export async function getConfiguracionPorTipoPrestamos(tipo_prestamo: string) {
+    const { data, error } = await supabase
+        .rpc('get_configuracion_por_tipo_prestamo', {
+            tipo_prestamo: tipo_prestamo
+        });
+
+    if (error) {
+        console.error('Error al obtener la configuración por tipo de préstamo:', error);
+        throw error;
+    }
+
+    return data;
+}
+
+export async function getTiposPrestamos() {
+    const { data, error } = await supabase
+        .from('tipo_prestamos')
+        .select('*');
+
+    if (error) {
+        console.error('Error al obtener los tipos de préstamos:', error);
+        throw error;
+    }
+
+    return data;
+}
 
