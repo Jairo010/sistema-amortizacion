@@ -41,7 +41,7 @@ export async function calcularSistemaAleman(monto: number, plazo: number, tasa: 
 
     return data;
 }
-
+/*
 export async function getConfiguracion(nombre_institucion: string) {
     const { data, error } = await supabase
         .from('configuracion')
@@ -55,7 +55,7 @@ export async function getConfiguracion(nombre_institucion: string) {
 
     return data;
 }
-
+*/
 export async function getConfiguracionPorTipoPrestamos(tipo_prestamo: string) {
     const { data, error } = await supabase
         .rpc('get_configuracion_por_tipo_prestamo', {
