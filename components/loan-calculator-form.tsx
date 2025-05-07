@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Calculator, HelpCircle, Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -16,21 +16,63 @@ import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { LoanResults } from "@/components/loan-results"
 import { Badge } from "@/components/ui/badge"
+import { calcularSistemaFrances } from "@/app/utils/supabase/supabase.service"
+import { calcularSistemaAleman } from "@/app/utils/supabase/supabase.service"
+//import { getConfiguracion } from "@/app/utils/supabase/supabase.service"
+import { getConfiguracionesPorInstitucionesFinancieras } from "@/app/utils/supabase/supabase.service"
 
 export function LoanCalculatorForm() {
   // Estados para los valores del formulario
-  const [loanType, setLoanType] = useState("personal")
+  const [loanType, setLoanType] = useState("prestamo personal")
   const [amount, setAmount] = useState(100000)
-  const [term, setTerm] = useState(60)
-  const [interestRate, setInterestRate] = useState(12.5)
+  const [term, setTerm] = useState(1)
+  const [interestRate, setInterestRate] = useState(0.00)
   const [amortizationType, setAmortizationType] = useState("french")
   const [paymentFrequency, setPaymentFrequency] = useState("monthly")
   const [includeInsurance, setIncludeInsurance] = useState(false)
   const [includeCommission, setIncludeCommission] = useState(false)
   const [gracePeriod, setGracePeriod] = useState(0)
+  const [calculationResults, setCalculationResults] = useState<any>(null)
+  const [configLoanTypes, setConfigLoanTypes] = useState<any>(null)
+  const [dataResult, setDataResult] = useState<any>(null)
+  const minAmount = 1000
+  const maxAmount = 1000000
+  const minTerm = 1
+
 
   // Estado para controlar si se muestran los resultados
   const [showResults, setShowResults] = useState(false)
+
+  // Efecto para cargar la configuración al montar el componente
+  useEffect(() => {
+    const loadConfiguracion = async () => {
+      try {
+        const configData = await getConfiguracionesPorInstitucionesFinancieras("Jairos Bank")
+        console.log('Configuración cargada:', configData)
+        setConfigLoanTypes(configData)
+        // Establecer la tasa de interés inicial
+        const initialConfig = configData?.tipos_prestamos?.find((config: any) => config.descripcion === loanType)
+        if (initialConfig) {
+          setInterestRate(initialConfig.configuracion.interes_int)
+        }
+      } catch (error) {
+        console.error('Error al cargar la configuración:', error)
+      }
+    }
+
+    loadConfiguracion()
+  }, [])
+
+  // Obtener la configuración actual según el tipo de préstamo
+  const currentConfig = configLoanTypes?.tipos_prestamos?.find((config: any) => config.descripcion === loanType)
+  console.log('Configuración actual:', currentConfig)
+
+  // Efecto para actualizar la tasa de interés cuando cambia el tipo de préstamo
+  useEffect(() => {
+    if (currentConfig) {
+      setInterestRate(currentConfig.configuracion.interes_int)
+    }
+  }, [currentConfig])
 
   // Configuraciones según el tipo de préstamo
   const loanConfigs = {
@@ -76,18 +118,17 @@ export function LoanCalculatorForm() {
     },
   }
 
-  // Obtener la configuración actual según el tipo de préstamo
-  const currentConfig = loanConfigs[loanType as keyof typeof loanConfigs]
-
   // Función para manejar el cambio de tipo de préstamo
   const handleLoanTypeChange = (value: string) => {
     setLoanType(value)
-    const config = loanConfigs[value as keyof typeof loanConfigs]
+    const config = configLoanTypes?.tipos_prestamos?.find((config: any) => config.descripcion === value)
 
-    // Ajustar valores según los límites del nuevo tipo de préstamo
-    setAmount(Math.min(Math.max(amount, config.minAmount), config.maxAmount))
-    setTerm(Math.min(Math.max(term, config.minTerm), config.maxTerm))
-    setInterestRate(config.baseRate)
+    if (config) {
+      // Ajustar valores según los límites del nuevo tipo de préstamo
+      setAmount(Math.min(Math.max(amount, 1000), 1000000))
+      setTerm(Math.min(Math.max(term, 1), config.configuracion.cant_anios))
+      setInterestRate(config.configuracion.interes_int)
+    }
   }
 
   // Función para formatear montos como moneda
@@ -103,28 +144,60 @@ export function LoanCalculatorForm() {
   // Función para calcular el CAT (Costo Anual Total)
   const calculateCAT = () => {
     // Esta es una aproximación simplificada del CAT
-    let cat = interestRate
+    let cat = currentConfig?.configuracion.interes_int
 
     if (includeInsurance) {
-      cat += currentConfig.insuranceRate * 12
+      cat += currentConfig?.configuracion.interes_int * 12
     }
 
     if (includeCommission) {
       if (currentConfig.commissionType === "opening") {
         // Convertir comisión de apertura a tasa anual equivalente
-        cat += (currentConfig.commissionRate / (term / 12)) * 100
+        cat += (currentConfig.commissionRate / (term)) * 100
       } else {
         cat += currentConfig.commissionRate * 12
       }
     }
 
-    return cat.toFixed(2)
+    return cat
   }
 
   // Función para manejar el envío del formulario
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setShowResults(true)
+    setInterestRate(currentConfig?.configuracion.interes_int)
+/*
+    if (!config) {
+      console.error('La configuración no está cargada')
+      return
+    }*/
+
+    try {
+      let results;
+      if (amortizationType === "french") {
+        //results = await calcularSistemaFrances(amount, term, config.interes_int)
+        console.log('amount', amount);
+        console.log('term', term);
+        console.log('interestRate', interestRate);
+        
+        results = await calcularSistemaFrances(amount, term, interestRate)
+        console.log('Resultados sistema francés:', results)
+        setDataResult(results)
+      } else {
+        console.log('amount', amount);
+        console.log('term', term);
+        console.log('interestRate', interestRate);
+        results = await calcularSistemaAleman(amount, term, interestRate)
+        console.log('Resultados sistema alemán:', results)
+        setDataResult(results)
+      }
+      
+      setCalculationResults(results)
+      setShowResults(true)
+    } catch (error) {
+      console.error('Error al calcular:', error)
+      // Aquí podrías mostrar un mensaje de error al usuario
+    }
   }
 
   // Función para iniciar un nuevo cálculo
@@ -153,10 +226,10 @@ export function LoanCalculatorForm() {
                           <SelectValue placeholder="Selecciona un tipo de préstamo" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="personal">Préstamo Personal</SelectItem>
-                          <SelectItem value="mortgage">Préstamo Hipotecario</SelectItem>
-                          <SelectItem value="auto">Préstamo Automotriz</SelectItem>
-                          <SelectItem value="business">Préstamo Empresarial</SelectItem>
+                          <SelectItem value="prestamo personal">Préstamo Personal</SelectItem>
+                          <SelectItem value="prestamo hipotecario">Préstamo Hipotecario</SelectItem>
+                          <SelectItem value="prestamo automotriz">Préstamo Automotriz</SelectItem>
+                          <SelectItem value="prestamo empresarial">Préstamo Empresarial</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -168,15 +241,15 @@ export function LoanCalculatorForm() {
                       </div>
                       <Slider
                         id="amount"
-                        min={currentConfig.minAmount}
-                        max={currentConfig.maxAmount}
+                        min={minAmount}
+                        max={maxAmount}
                         step={1000}
                         value={[amount]}
                         onValueChange={(values) => setAmount(values[0])}
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{formatCurrency(currentConfig.minAmount)}</span>
-                        <span>{formatCurrency(currentConfig.maxAmount)}</span>
+                        <span>{formatCurrency(minAmount)}</span>
+                        <span>{formatCurrency(maxAmount)}</span>
                       </div>
                       <Input
                         type="number"
@@ -184,7 +257,7 @@ export function LoanCalculatorForm() {
                         onChange={(e) => {
                           const value = Number.parseInt(e.target.value)
                           if (!isNaN(value)) {
-                            setAmount(Math.min(Math.max(value, currentConfig.minAmount), currentConfig.maxAmount))
+                            setAmount(Math.min(Math.max(value, minAmount), maxAmount))
                           }
                         }}
                         className="mt-2"
@@ -193,24 +266,22 @@ export function LoanCalculatorForm() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <Label htmlFor="term">Plazo (meses)</Label>
+                        <Label htmlFor="term">Plazo (años)</Label>
                         <span className="text-sm font-medium">
-                          {term} meses
-                          {term >= 12 &&
-                            ` (${Math.floor(term / 12)} años${term % 12 > 0 ? ` y ${term % 12} meses` : ""})`}
+                          {term} años
                         </span>
                       </div>
                       <Slider
                         id="term"
-                        min={currentConfig.minTerm}
-                        max={currentConfig.maxTerm}
+                        min={minTerm}
+                        max={currentConfig?.configuracion.cant_anios}
                         step={1}
                         value={[term]}
                         onValueChange={(values) => setTerm(values[0])}
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{currentConfig.minTerm} meses</span>
-                        <span>{currentConfig.maxTerm} meses</span>
+                        <span>{minTerm} años</span>
+                        <span>{currentConfig?.configuracion.cant_anios} años</span>
                       </div>
                       <Input
                         type="number"
@@ -218,7 +289,7 @@ export function LoanCalculatorForm() {
                         onChange={(e) => {
                           const value = Number.parseInt(e.target.value)
                           if (!isNaN(value)) {
-                            setTerm(Math.min(Math.max(value, currentConfig.minTerm), currentConfig.maxTerm))
+                            setTerm(Math.min(Math.max(value, minTerm), currentConfig?.configuracion.cant_anios))
                           }
                         }}
                         className="mt-2"
@@ -232,11 +303,11 @@ export function LoanCalculatorForm() {
                       </div>
                       <Slider
                         id="interest-rate"
+                        value={[interestRate]}
+                        onValueChange={(values) => setInterestRate(values[0])}
                         min={5}
                         max={30}
                         step={0.1}
-                        value={[interestRate]}
-                        onValueChange={(values) => setInterestRate(values[0])}
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>5%</span>
@@ -248,10 +319,9 @@ export function LoanCalculatorForm() {
                         onChange={(e) => {
                           const value = Number.parseFloat(e.target.value)
                           if (!isNaN(value)) {
-                            setInterestRate(Math.min(Math.max(value, 5), 30))
+                            setInterestRate(value)
                           }
                         }}
-                        step="0.1"
                         className="mt-2"
                       />
                     </div>
@@ -331,7 +401,7 @@ export function LoanCalculatorForm() {
                       <div className="space-y-0.5">
                         <Label htmlFor="include-insurance">Incluir Seguro de Vida/Desempleo</Label>
                         <p className="text-xs text-muted-foreground">
-                          Costo: {currentConfig.insuranceRate}% mensual sobre saldo
+                          Costo: {currentConfig?.insuranceRate}% mensual sobre saldo
                         </p>
                       </div>
                       <Switch id="include-insurance" checked={includeInsurance} onCheckedChange={setIncludeInsurance} />
@@ -341,7 +411,7 @@ export function LoanCalculatorForm() {
                       <div className="space-y-0.5">
                         <Label htmlFor="include-commission">Incluir Comisión por Apertura</Label>
                         <p className="text-xs text-muted-foreground">
-                          Costo: {currentConfig.commissionRate}% sobre monto del préstamo
+                          Costo: {currentConfig?.commissionRate}% sobre monto del préstamo
                         </p>
                       </div>
                       <Switch
@@ -422,6 +492,7 @@ export function LoanCalculatorForm() {
           includeCommission={includeCommission}
           gracePeriod={gracePeriod}
           loanConfig={currentConfig}
+          data={dataResult}
           onNewCalculation={handleNewCalculation}
         />
       )}
